@@ -1,5 +1,5 @@
 ---
-- hosts: localhost
+- hosts: all
   become: yes
   gather_facts: true
 
@@ -15,17 +15,24 @@
    backup_user: ipam-backup
    backup_path: /opt/ipam-backups
    fpm_socket: /run/php-fpm/www.sock
-   ansible_python_interpreter: /usr/bin/python3
+   ansible_python_interpreter: /usr/bin/python2
 
   tasks:
     - set_fact:
         db_password: "{{ lookup('password', '/dev/null length=12 chars=ascii_letters,digits') }}"
         db_root_password: "{{ lookup('password', '/dev/null length=12 chars=ascii_letters,digits') }}"
 
+    - name: Install EPEL
+      yum:
+        name: epel-release
+        update_cache: yes
+        state: present
+
     - name: Install Prerequisites...
       yum:
         name:
           [
+            git,
             mariadb-server,
             nginx,
             php-curl,
@@ -41,11 +48,18 @@
             php-pear,
             php-recode,
             php-xmlrpc,
-            php-xml
+            php-xml,
+            python3-pip,
+            python-setuptools
           ]
         update_cache: true
         state: present
    
+    - name: Update PIP
+      pip:
+        name: pip
+        state: latest
+
     - name: Install Python MYSQL Module...
       pip:
         name: pymysql
@@ -87,6 +101,7 @@
       copy:
         src: "{{ipam_path}}/config.dist.php"
         dest: "{{ipam_path}}/config.php"
+        remote_src: yes
   
     - name: Update IPAM Config File...
       replace:
