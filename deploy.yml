@@ -4,7 +4,7 @@
   gather_facts: true
 
   vars:
-   ipam_version: 1.4
+   ipam_version: '1.4'
    scan_minutes: 15
    backup_retention_days: 30
    timezone: Australia/Sydney
@@ -15,6 +15,7 @@
    backup_user: ipam-backup
    backup_path: /opt/ipam-backups
    fpm_socket: /run/php-fpm/www.sock
+   pip_url: https://bootstrap.pypa.io/pip/2.7/get-pip.py
    ansible_python_interpreter: /usr/bin/python2
 
   tasks:
@@ -49,16 +50,19 @@
             php-recode,
             php-xmlrpc,
             php-xml,
-            python3-pip,
-            python-setuptools
+            python-setuptools,
+            wget
           ]
         update_cache: true
         state: present
    
-    - name: Update PIP
-      pip:
-        name: pip
-        state: latest
+    - name: Grab latest PIP - Stupid Janky RHEL 7...
+      get_url:
+        url: "{{pip_url}}"
+        dest: /tmp/get-pip.py
+
+    - name : Update PIP - Did I say RHEL 7 sucks?...
+      command: /bin/python /tmp/get-pip.py
 
     - name: Install Python MYSQL Module...
       pip:
@@ -92,10 +96,28 @@
        src: templates/nginx.j2
        dest: /etc/nginx/nginx.conf
 
+    - name: Update PHP-FPM Config...
+      replace:  
+        path: /etc/php-fpm.d/www.conf
+        regexp: "{{item.key}}"
+        replace: "{{item.val}}"
+      with_items:
+        - {"key": "listen = 127.0.0.1:9000", "val":"listen = /run/php-fpm/www.sock" }
+        - {"key": "user = apache","val":"user = nginx"}
+        - {"key": "group = apache","val":"group = nginx"}
+
+    - name: Fix Broken RHEL7 PHP-FPM Session Path...
+      file:
+        path: /var/lib/php/session
+        state: directory
+        owner: nginx
+        group: nginx
+         
     - name: Set PHP-FPM Pool Timezone...
       lineinfile:
         path: /etc/php-fpm.d/www.conf
         line: "php_admin_value[date.timezone] = {{timezone}}"
+
 
     - name: Copy IPAM Config...
       copy:
@@ -170,7 +192,6 @@
       mysql_user:
         login_user: root
         login_unix_socket: "{{db_socket}}"
-        state: present
         name: "{{db_account}}"
         password: "{{db_password}}"
         priv: "{{db_name}}.*:ALL"
