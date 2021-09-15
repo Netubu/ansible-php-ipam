@@ -4,6 +4,8 @@
   gather_facts: true
 
   vars:
+   proxy: true
+   http_proxy: "http://proxy.server:8080"
    ipam_version: '1.4'
    scan_minutes: 15
    backup_retention_days: 30
@@ -55,18 +57,37 @@
           ]
         update_cache: true
         state: present
-   
-    - name: Grab latest PIP - Stupid Janky RHEL 7...
+  
+    - name: Set Git Proxy...
+      command: git config --global http.proxy "{{http_proxy}}" 
+      when: proxy
+
+    - name: Grab latest PIP...
       get_url:
         url: "{{pip_url}}"
         dest: /tmp/get-pip.py
 
-    - name : Update PIP - Did I say RHEL 7 sucks?...
+    - name: Grab latest PIP via Proxy...
+      get_url:
+        url: "{{pip_url}}"
+        dest: /tmp/get-pip.py
+      when: proxy    
+      environment:
+        http_proxy: "{{http_proxy}}"
+     
+    - name : Update PIP...
       command: /bin/python /tmp/get-pip.py
+
+    - name: Install Python MYSQL Module via Proxy...
+      pip:
+        name: pymysql
+      when: proxy
+      environment:
+        http_proxy: "{{http_proxy}}"
 
     - name: Install Python MYSQL Module...
       pip:
-        name: pymysql
+        name: pymysql      
 
     - name: Install PHP-IPAM...
       git:
