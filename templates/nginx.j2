@@ -34,7 +34,7 @@ server {
 server {
         listen 443 ssl;
         server_name default_server;
-        root {{ipam_path}};
+        root {{ipam_path}}/phpipam;
         index  index.php index.html index.htm;
         ssl_certificate  /etc/ssl/ipam.crt;
         ssl_certificate_key /etc/ssl/ipam.key;

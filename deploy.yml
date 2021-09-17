@@ -4,20 +4,19 @@
   gather_facts: true
 
   vars:
-   proxy: true
-   http_proxy: "http://proxy.server:8080"
-   ipam_version: '1.4'
+   ipam_version: '1.4.4'
    scan_minutes: 15
    backup_retention_days: 30
    timezone: Australia/Sydney
    db_name: phpipam
    db_account: phpipam
    db_socket: /var/lib/mysql/mysql.sock
-   ipam_path: /var/www/html/ipam
+   ipam_path: /var/www/html
    backup_user: ipam-backup
    backup_path: /opt/ipam-backups
    fpm_socket: /run/php-fpm/www.sock
-   pip_url: https://bootstrap.pypa.io/pip/2.7/get-pip.py
+   pip_file: get-pip.py
+   pymysql: PyMySQL-0.10.1
    ansible_python_interpreter: /usr/bin/python2
 
   tasks:
@@ -35,7 +34,6 @@
       yum:
         name:
           [
-            git,
             mariadb-server,
             nginx,
             php-curl,
@@ -53,47 +51,25 @@
             php-xmlrpc,
             php-xml,
             python-setuptools,
-            wget
           ]
         update_cache: true
         state: present
   
-    - name: Set Git Proxy...
-      command: git config --global http.proxy "{{http_proxy}}" 
-      when: proxy
-
-    - name: Grab latest PIP...
-      get_url:
-        url: "{{pip_url}}"
-        dest: /tmp/get-pip.py
-
-    - name: Grab latest PIP via Proxy...
-      get_url:
-        url: "{{pip_url}}"
-        dest: /tmp/get-pip.py
-      when: proxy    
-      environment:
-        http_proxy: "{{http_proxy}}"
-     
-    - name : Update PIP...
-      command: /bin/python /tmp/get-pip.py
-
-    - name: Install Python MYSQL Module via Proxy...
-      pip:
-        name: pymysql
-      when: proxy
-      environment:
-        http_proxy: "{{http_proxy}}"
-
-    - name: Install Python MYSQL Module...
-      pip:
-        name: pymysql      
+    - name: Copy PyMYSQL...
+      unarchive:
+        src: "install/{{pymysql}}.tar.gz"
+        dest: "/tmp"
+    
+    - name: Install PyMYSQL...
+      command: /bin/python setup.py install
+      args:
+       chdir: "/tmp/{{pymysql}}"
 
     - name: Install PHP-IPAM...
-      git:
-       repo: https://github.com/phpipam/phpipam.git
+      unarchive:
+       src: "install/phpipam-v{{ipam_version}}.tgz"
        dest:  "{{ipam_path}}"
-       version: "{{ipam_version}}"
+
 
     - name: Copy Certificates...
       template:
@@ -142,13 +118,13 @@
 
     - name: Copy IPAM Config...
       copy:
-        src: "{{ipam_path}}/config.dist.php"
-        dest: "{{ipam_path}}/config.php"
+        src: "{{ipam_path}}/phpipam/config.dist.php"
+        dest: "{{ipam_path}}/phpipam/config.php"
         remote_src: yes
   
     - name: Update IPAM Config File...
       replace:
-        path: "{{ipam_path}}/config.php"
+        path: "{{ipam_path}}/phpipam/config.php"
         regexp: "phpipamadmin"
         replace: "{{db_password}}"
 
@@ -207,7 +183,7 @@
         login_unix_socket: "{{db_socket}}"
         name: "{{db_name}}"
         state: import
-        target: "{{ipam_path}}/db/SCHEMA.sql"
+        target: "{{ipam_path}}/phpipam/db/SCHEMA.sql"
 
     - name: Create Database User...
       mysql_user:
